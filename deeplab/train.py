@@ -122,9 +122,6 @@ flags.DEFINE_string('tf_initial_checkpoint', None,
 flags.DEFINE_boolean('initialize_last_layer', True,
                      'Initialize the last layer.')
 
-flags.DEFINE_boolean('last_layers_contain_logits_only', False,
-                     'Only consider logits as last layers or not.')
-
 flags.DEFINE_integer('slow_start_step', 0,
                      'Training model with small learning rate for few steps.')
 
@@ -155,7 +152,7 @@ flags.DEFINE_integer('output_stride', 16,
                      'The ratio of input to output spatial resolution.')
 
 # Dataset settings.
-flags.DEFINE_string('dataset', 'pascal_voc_seg',
+flags.DEFINE_string('dataset', 'Selfie',
                     'Name of the segmentation dataset.')
 
 flags.DEFINE_string('train_split', 'train',
@@ -325,7 +322,7 @@ def main(unused_argv):
       summaries.add(tf.summary.scalar('total_loss', total_loss))
 
       # Modify the gradients for biases and last layer variables.
-      last_layers = model.get_extra_layer_scopes(FLAGS.last_layers_contain_logits_only)
+      last_layers = model.get_extra_layer_scopes()
       grad_mult = train_utils.get_model_gradient_multipliers(
           last_layers, FLAGS.last_layer_gradient_multiplier)
       if grad_mult:
@@ -364,7 +361,7 @@ def main(unused_argv):
         startup_delay_steps=startup_delay_steps,
         init_fn=train_utils.get_model_init_fn(
             FLAGS.train_logdir,
-            FLAGS.tf_initial_checkpoint,
+            # FLAGS.tf_initial_checkpoint,
             FLAGS.initialize_last_layer,
             last_layers,
             ignore_missing_vars=True),
@@ -375,6 +372,6 @@ def main(unused_argv):
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('train_logdir')
-  flags.mark_flag_as_required('tf_initial_checkpoint')
+  # flags.mark_flag_as_required('tf_initial_checkpoint')
   flags.mark_flag_as_required('dataset_dir')
   tf.app.run()
