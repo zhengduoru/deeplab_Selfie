@@ -323,6 +323,7 @@ def image_to_background(image, seg_map, background, positions, fill, default_pos
     :param positions: [x_left, y_top, x_right, y_bottom] or np.array([])
     '''
     if isinstance(positions, list):
+        # 专门给证件照的 id_card1, final1, final2
         if fill:
             image[np.where(seg_map == 0)] = fill_value
             image = blur_edge(image, seg_map)
@@ -345,6 +346,7 @@ def image_to_background(image, seg_map, background, positions, fill, default_pos
             background[positions[1]:positions[3], positions[0]:positions[2], :] = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         return background, seg_map
     if isinstance(positions, np.ndarray):
+        # 专门给homography的 id_card2
         if fill:
             image[np.where(seg_map == 0)] = fill_value
             image = blur_edge(image, seg_map)
@@ -358,6 +360,8 @@ def image_to_background(image, seg_map, background, positions, fill, default_pos
         roi = cv2.imread('./worldcup/background/id_card2_roi.jpg', cv2.IMREAD_GRAYSCALE)
         background[np.where(roi > 100)] = cv2.cvtColor(im_out, cv2.COLOR_RGB2BGR)[np.where(roi > 100)]
         return background, seg_map
+    if positions == None:
+
 
 
 def vis_segmentation(image, seg_map, image_name, width, height, background_image):
@@ -417,7 +421,7 @@ def run_demo_image(image_name):
     print('running deeplab on image %s...' % image_name)
     resized_im, seg_map, width, height = model.run(orignal_im)
 
-    vis_segmentation(np.array(resized_im), seg_map, image_name, width, height, 'worldcup')
+    vis_segmentation(np.array(resized_im), seg_map, image_name, width, height, 'final1')
 
 
 def capture_positions(image_path):

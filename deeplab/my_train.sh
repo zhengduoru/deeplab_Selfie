@@ -54,6 +54,7 @@ python "${WORK_DIR}"/train.py \
   --train_batch_size=1 \
   --training_number_of_steps="${NUM_ITERATIONS}" \
   --fine_tune_batch_norm=false \
+  --tf_initial_checkpoint="${INIT_FOLDER}/deeplabv3_pascal_trainval/model.ckpt" \
   --train_logdir="${TRAIN_LOGDIR}" \
   --dataset_dir="${SELFIE_DATASET}"
 
