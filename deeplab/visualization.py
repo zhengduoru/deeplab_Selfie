@@ -287,7 +287,31 @@ def cut_and_resize(image, seg_map, size):
     return image, seg_map
 
 
-def resize_and_pad(image, size, pad_value=0):
+# def resize_with_face_square(image, seg_map, face_square_dst):
+#     try:
+#         face_locations = face_recognition.face_locations(image)[0]
+#         face_square_src = (face_locations[2] - face_locations[0]) * (face_locations[1] - face_locations[3])
+#         rate = face_square_dst / face_square_src
+#         size = (int(image.shape[1] * rate), int(image.shape[0] * rate))
+#         image = cv2.resize(image, size)
+#         seg_map = cv2.resize(seg_map, size)
+#         print('have face')
+#         return image, seg_map
+#     except:
+#         print('no face')
+#         return image, seg_map
+
+
+def resize_with_body_square(image, seg_map, body_square_dst):
+    body_square_src = np.sum(seg_map) / 255
+    rate = np.sqrt(body_square_dst / body_square_src)
+    size = (int(image.shape[1] * rate), int(image.shape[0] * rate))
+    image = cv2.resize(image, size)
+    seg_map = cv2.resize(seg_map, size)
+    return image, seg_map
+
+
+def resize_and_pad(image, size, pad_value=0, height_how='both'):
     '''把图片resize到size大小，但是不改变shape，其余地方填空'''
     if image.shape[1] / image.shape[0] - size[0] / size[1] > 0 and len(image.shape) == 3:  # 横着的图
         size_real = (size[0], int(image.shape[0] / image.shape[1] * size[0]))
@@ -297,23 +321,160 @@ def resize_and_pad(image, size, pad_value=0):
         size_real = (size[0], int(image.shape[0] / image.shape[1] * size[0]))
         image = np.pad(cv2.resize(image, size_real), [[size[1] - size_real[1], 0], [0, 0]], 'constant',
                        constant_values=pad_value)
+
     elif image.shape[1] / image.shape[0] - size[0] / size[1] < 0 and len(image.shape) == 3:  # 竖着的图
         size_real = (int(image.shape[1] / image.shape[0] * size[1]), size[1])
-        image = np.pad(cv2.resize(image, size_real), [[0, 0],
-                                                      [int((size[0] - size_real[0]) // 2),
-                                                       size[0] - size_real[0] - int((size[0] - size_real[0]) // 2)],
-                                                      [0, 0]],
-                       'constant', constant_values=pad_value)
+        if height_how == 'both':
+            image = np.pad(cv2.resize(image, size_real), [[0, 0],
+                                                          [int((size[0] - size_real[0]) // 2),
+                                                           size[0] - size_real[0] - int((size[0] - size_real[0]) // 2)],
+                                                          [0, 0]],
+                           'constant', constant_values=pad_value)
+        elif height_how == 'left':
+            image = np.pad(cv2.resize(image, size_real), [[0, 0],
+                                                          [size[0] - size_real[0], 0],
+                                                          [0, 0]],
+                           'constant', constant_values=pad_value)
+        else:
+            image = np.pad(cv2.resize(image, size_real), [[0, 0],
+                                                          [0, size[0] - size_real[0]],
+                                                          [0, 0]],
+                           'constant', constant_values=pad_value)
+
     else:  # 竖着的图
-        size_real = (int(image.shape[1] / image.shape[0] * size[1]), size[1])
-        image = np.pad(cv2.resize(image, size_real), [[0, 0],
-                                                      [int((size[0] - size_real[0]) // 2),
-                                                       size[0] - size_real[0] - int((size[0] - size_real[0]) // 2)]],
-                       'constant', constant_values=pad_value)
+        if height_how == 'both':
+            size_real = (int(image.shape[1] / image.shape[0] * size[1]), size[1])
+            image = np.pad(cv2.resize(image, size_real), [[0, 0],
+                                                          [int((size[0] - size_real[0]) // 2),
+                                                           size[0] - size_real[0] - int((size[0] - size_real[0]) // 2)]],
+                           'constant', constant_values=pad_value)
+        elif height_how == 'left':
+            size_real = (int(image.shape[1] / image.shape[0] * size[1]), size[1])
+            image = np.pad(cv2.resize(image, size_real), [[0, 0],
+                                                          [size[0] - size_real[0], 0]],
+                           'constant', constant_values=pad_value)
+        else:
+            size_real = (int(image.shape[1] / image.shape[0] * size[1]), size[1])
+            image = np.pad(cv2.resize(image, size_real), [[0, 0],
+                                                          [0, size[0] - size_real[0]]],
+                           'constant', constant_values=pad_value)
     return image
 
 
-def image_to_background(image, seg_map, background, positions, fill, default_positions=None, fill_value=None):
+# def how_to_cut_and_pad(image, seg_map, size):
+#     # 填上不填下，左右看哪边贴边更严重
+#     left_edge = np.nonzero(seg_map[:, 0])[0]
+#     right_edge = np.nonzero(seg_map[:, -1])[0]
+#     if left_edge.shape[0] == 0:
+#         left_length = 0
+#     else:
+#         left_length = left_edge.max() - left_edge.min()
+#     if right_edge.shape[0] == 0:
+#         right_length = 0
+#     else:
+#         right_length = right_edge.max() - right_edge.min()
+#
+#     tmp_shape = image.shape
+#     # cut
+#     if tmp_shape[1] >= size[0]:
+#         # 如果image比background更宽，cut不严重的贴边
+#         if left_length >= right_length:
+#             image = image[:, :size[0], :]
+#             seg_map = seg_map[:, :size[0]]
+#         if left_length < right_length:
+#             image = image[:, tmp_shape[1]-size[0]:, :]
+#             seg_map = seg_map[:, tmp_shape[1]-size[0]:]
+#     if tmp_shape[0] >= size[1]:
+#         # 如果image比background更长，cut下沿
+#         image = image[:size[0], :, :]
+#         seg_map = seg_map[:size[0], :]
+#
+#     # pad
+#     tmp_shape = image.shape
+#     if left_length >= right_length:
+#         print(1)
+#         image = np.pad(image, [[size[1] - tmp_shape[0], 0], [0, size[0] - tmp_shape[1]], [0, 0]], 'constant')
+#         seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0], [0, size[0] - tmp_shape[1]]], 'constant')
+#     else:
+#         print(2)
+#         image = np.pad(image, [[size[1] - tmp_shape[0], 0], [size[0] - tmp_shape[1], 0], [0, 0]], 'constant')
+#         seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0], [size[0] - tmp_shape[1], 0]], 'constant')
+#     return image, seg_map
+
+
+def how_to_cut_and_pad(image, seg_map, size):
+
+    left_edge = np.nonzero(seg_map[:, 0])[0]
+    right_edge = np.nonzero(seg_map[:, -1])[0]
+    if left_edge.shape[0] == 0:
+        left_length = 0
+    else:
+        left_length = left_edge.max() - left_edge.min()
+    if right_edge.shape[0] == 0:
+        right_length = 0
+    else:
+        right_length = right_edge.max() - right_edge.min()
+
+    height_max = np.nonzero(seg_map)[0].max()
+    height_min = np.nonzero(seg_map)[0].min()
+    width_max = np.nonzero(seg_map)[1].max()
+    width_min = np.nonzero(seg_map)[1].min()
+    image = image[height_min:height_max, width_min:width_max, :]
+    seg_map = seg_map[height_min:height_max, width_min:width_max]
+
+
+    tmp_shape = image.shape
+    if tmp_shape[0] <= size[1] and tmp_shape[1] <= size[0] and left_length <= right_length:
+        if left_length == 0 and right_length == 0:
+            image = np.pad(image, [[size[1] - tmp_shape[0], 0],
+                                   [(size[0] - tmp_shape[1])//2,
+                                    size[0] - tmp_shape[1] - (size[0] - tmp_shape[1])//2],
+                                   [0, 0]], 'constant')
+            seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0],
+                                       [(size[0] - tmp_shape[1])//2,
+                                    size[0] - tmp_shape[1] - (size[0] - tmp_shape[1])//2]], 'constant')
+        else:
+            image = np.pad(image, [[size[1] - tmp_shape[0], 0], [size[0] - tmp_shape[1], 0], [0, 0]], 'constant')
+            seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0], [size[0] - tmp_shape[1], 0]], 'constant')
+    elif tmp_shape[0] <= size[1] and tmp_shape[1] <= size[0] and left_length > right_length:
+        image = np.pad(image, [[size[1] - tmp_shape[0], 0], [0, size[0] - tmp_shape[1]], [0, 0]], 'constant')
+        seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0], [0, size[0] - tmp_shape[1]]], 'constant')
+    elif tmp_shape[0] <= size[1] and tmp_shape[1] >= size[0]:
+        image = resize_and_pad(image, size)
+        seg_map = resize_and_pad(seg_map, size)
+    elif tmp_shape[0] >= size[1] and tmp_shape[1] <= size[0] and left_length <= right_length:
+        if left_length == 0 and right_length == 0:
+            image = resize_and_pad(image, size, height_how='both')
+            seg_map = resize_and_pad(seg_map, size, height_how='both')
+        else:
+            image = resize_and_pad(image, size, height_how='left')
+            seg_map = resize_and_pad(seg_map, size, height_how='left')
+    elif tmp_shape[0] >= size[1] and tmp_shape[1] <= size[0] and left_length >= right_length:
+        if left_length == 0 and right_length == 0:
+            image = resize_and_pad(image, size, height_how='both')
+            seg_map = resize_and_pad(seg_map, size, height_how='both')
+        else:
+            image = resize_and_pad(image, size, height_how='right')
+            seg_map = resize_and_pad(seg_map, size, height_how='right')
+    elif tmp_shape[0] >= size[1] and tmp_shape[1] >= size[0] and left_length <= right_length:
+        if left_length == 0 and right_length == 0:
+            image = resize_and_pad(image, size, height_how='both')
+            seg_map = resize_and_pad(seg_map, size, height_how='both')
+        else:
+            image = resize_and_pad(image, size, height_how='left')
+            seg_map = resize_and_pad(seg_map, size, height_how='left')
+    else:
+        if left_length == 0 and right_length == 0:
+            image = resize_and_pad(image, size, height_how='both')
+            seg_map = resize_and_pad(seg_map, size, height_how='both')
+        else:
+            image = resize_and_pad(image, size, height_how='right')
+            seg_map = resize_and_pad(seg_map, size, height_how='right')
+    return image, seg_map
+
+
+def image_to_background(image, seg_map, background, positions, fill, default_positions=None, fill_value=None,
+                        body_square=None):
     '''
     :param image:
     :param fill_value:
@@ -361,7 +522,13 @@ def image_to_background(image, seg_map, background, positions, fill, default_pos
         background[np.where(roi > 100)] = cv2.cvtColor(im_out, cv2.COLOR_RGB2BGR)[np.where(roi > 100)]
         return background, seg_map
     if positions == None:
-
+        # 首先计算整个半身照的面积，调整到合适大小，再在下方贴边，再在左右贴边。
+        image, seg_map = resize_with_body_square(image, seg_map, body_square)
+        background = cv2.imread(background)
+        back_size = (background.shape[1], background.shape[0])
+        image, seg_map = how_to_cut_and_pad(image, seg_map, back_size)
+        background[np.where(seg_map != 0)] = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)[np.where(seg_map != 0)]
+        return background, seg_map
 
 
 def vis_segmentation(image, seg_map, image_name, width, height, background_image):
@@ -384,12 +551,27 @@ def vis_segmentation(image, seg_map, image_name, width, height, background_image
     if background_image == 'worldcup':
         # image_to_background
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/worldcup.png',
-                                                  [45, 349, 443, 844], fill=False)
+                                                  positions=None, fill=False, body_square=100000)
         # blur_edge
         background = blur_edge(background, seg_map)
         cv2.imwrite('./worldcup/merge/worldcup/' + image_name.split('.')[0] + '.jpg', background)
-    # if background_image == 'ground1':
-    # if background_image == 'ground2':
+    if background_image == 'ground1':
+        background, seg_map = image_to_background(image, seg_map, './worldcup/background/ground1.jpeg',
+                                                  positions=None, fill=False, body_square=50000)
+
+        # blur_edge
+        background = blur_edge(background, seg_map)
+        print(background.shape)
+        cv2.imwrite('./worldcup/merge/ground_first/' + image_name.split('.')[0] + '.jpg', background)
+    if background_image == 'ground2':
+        background, seg_map = image_to_background(image, seg_map, './worldcup/background/ground2.jpg',
+                                                  positions=None, fill=False, body_square=200000)
+
+        # blur_edge
+        background = blur_edge(background, seg_map)
+        print(background.shape)
+        cv2.imwrite('./worldcup/merge/ground_second/' + image_name.split('.')[0] + '.jpg', background)
+
     if background_image == 'id_card1':
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/id_card1.png',
                                                   [181, 222, 345, 446], fill=True, fill_value=255)
@@ -420,8 +602,11 @@ def run_demo_image(image_name):
         return
     print('running deeplab on image %s...' % image_name)
     resized_im, seg_map, width, height = model.run(orignal_im)
-
-    vis_segmentation(np.array(resized_im), seg_map, image_name, width, height, 'final1')
+    # seg_map_out = seg_map.copy()
+    # seg_map_out[np.where(seg_map_out!=15)] = 0
+    # seg_map_out[np.where(seg_map_out==15)] = 255
+    # cv2.imwrite(IMAGE_DIR + '/' + image_name.split('.')[0] + '.png', seg_map_out)
+    vis_segmentation(np.array(resized_im), seg_map, image_name, width, height, 'ground2')
 
 
 def capture_positions(image_path):
@@ -451,6 +636,11 @@ def capture_positions(image_path):
 
 
 images = os.listdir(IMAGE_DIR)
+images = list(filter(lambda x :'png' not in x, images))
 
 for k, image_name in enumerate(images):  # [:5]:
     run_demo_image(image_name)
+
+
+
+# cv2.imshow('seg_map',seg_map);cv2.waitKey(0)
