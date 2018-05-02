@@ -361,7 +361,7 @@ def main(unused_argv):
         startup_delay_steps=startup_delay_steps,
         init_fn=train_utils.get_model_init_fn(
             FLAGS.train_logdir,
-            # FLAGS.tf_initial_checkpoint,
+            FLAGS.tf_initial_checkpoint,
             FLAGS.initialize_last_layer,
             last_layers,
             ignore_missing_vars=True),
@@ -372,6 +372,6 @@ def main(unused_argv):
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('train_logdir')
-  # flags.mark_flag_as_required('tf_initial_checkpoint')
+  flags.mark_flag_as_required('tf_initial_checkpoint')
   flags.mark_flag_as_required('dataset_dir')
   tf.app.run()

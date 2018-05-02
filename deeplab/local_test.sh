@@ -42,7 +42,7 @@ python "${WORK_DIR}"/model_test.py -v
 # Go to datasets folder and download PASCAL VOC 2012 segmentation dataset.
 DATASET_DIR="datasets"
 cd "${WORK_DIR}/${DATASET_DIR}"
-sh download_and_convert_voc2012.sh
+# sh download_and_convert_voc2012.sh
 
 # Go back to original directory.
 cd "${CURRENT_DIR}"
@@ -63,9 +63,9 @@ mkdir -p "${EXPORT_DIR}"
 
 # Copy locally the trained checkpoint as the initial checkpoint.
 TF_INIT_ROOT="http://download.tensorflow.org/models"
-TF_INIT_CKPT="deeplabv3_pascal_train_aug_2018_01_04.tar.gz"
+TF_INIT_CKPT="deeplabv3_pascal_trainval_2018_01_04.tar.gz"
 cd "${INIT_FOLDER}"
-wget -nd -c "${TF_INIT_ROOT}/${TF_INIT_CKPT}"
+# wget -nd -c "${TF_INIT_ROOT}/${TF_INIT_CKPT}"
 tar -xf "${TF_INIT_CKPT}"
 cd "${CURRENT_DIR}"
 
@@ -87,7 +87,7 @@ python "${WORK_DIR}"/train.py \
   --train_batch_size=4 \
   --training_number_of_steps="${NUM_ITERATIONS}" \
   --fine_tune_batch_norm=true \
-  --tf_initial_checkpoint="${INIT_FOLDER}/deeplabv3_pascal_train_aug/model.ckpt" \
+  --tf_initial_checkpoint="${INIT_FOLDER}/deeplabv3_pascal_trainval/model.ckpt" \
   --train_logdir="${TRAIN_LOGDIR}" \
   --dataset_dir="${PASCAL_DATASET}"
 

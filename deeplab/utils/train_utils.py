@@ -101,7 +101,8 @@ def get_model_init_fn(train_logdir,
   tf.logging.info('Initializing model from path: %s', tf_initial_checkpoint)
 
   # Variables that will not be restored.
-  exclude_list = ['global_step']
+  exclude_list = ['global_step', 'logits/semantic/Conv2D', 'logits/semantic/BiasAdd', 'ResizeBilinear_2',
+                  'Strided_slice_7', 'ResizeBilinear_3']
   if not initialize_last_layer:
     exclude_list.extend(last_layers)
 
