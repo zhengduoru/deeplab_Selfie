@@ -11,142 +11,14 @@ import cv2
 import numpy as np
 from PIL import Image
 from skimage import measure, color
-import face_recognition
 import tensorflow as tf
 
 if tf.__version__ < '1.5.0':
     raise ImportError('Please upgrade your tensorflow installation to v1.5.0 or newer!')
 
-# Dataset names.
-_CITYSCAPES = 'cityscapes'
-_PASCAL = 'pascal'
-
-# Max number of entries in the colormap for each dataset.
-_DATASET_MAX_ENTRIES = {
-    _CITYSCAPES: 19,
-    _PASCAL: 256,
-}
-
-
-def create_cityscapes_label_colormap():
-    """Creates a label colormap used in CITYSCAPES segmentation benchmark.
-
-    Returns:
-      A Colormap for visualizing segmentation results.
-    """
-    colormap = np.asarray([
-        [128, 64, 128],
-        [244, 35, 232],
-        [70, 70, 70],
-        [102, 102, 156],
-        [190, 153, 153],
-        [153, 153, 153],
-        [250, 170, 30],
-        [220, 220, 0],
-        [107, 142, 35],
-        [152, 251, 152],
-        [70, 130, 180],
-        [220, 20, 60],
-        [255, 0, 0],
-        [0, 0, 142],
-        [0, 0, 70],
-        [0, 60, 100],
-        [0, 80, 100],
-        [0, 0, 230],
-        [119, 11, 32],
-    ])
-    return colormap
-
-
-def get_pascal_name():
-    return _PASCAL
-
-
-def get_cityscapes_name():
-    return _CITYSCAPES
-
-
-def bit_get(val, idx):
-    """Gets the bit value.
-
-    Args:
-      val: Input value, int or numpy int array.
-      idx: Which bit of the input val.
-
-    Returns:
-      The "idx"-th bit of input val.
-    """
-    return (val >> idx) & 1
-
-
-def create_pascal_label_colormap():
-    """Creates a label colormap used in PASCAL VOC segmentation benchmark.
-
-    Returns:
-      A Colormap for visualizing segmentation results.
-    """
-    colormap = np.zeros((_DATASET_MAX_ENTRIES[_PASCAL], 3), dtype=int)
-    ind = np.arange(_DATASET_MAX_ENTRIES[_PASCAL], dtype=int)
-
-    for shift in reversed(range(8)):
-        for channel in range(3):
-            colormap[:, channel] |= bit_get(ind, channel) << shift
-        ind >>= 3
-
-    return colormap
-
-
-def create_label_colormap(dataset=_PASCAL):
-    """Creates a label colormap for the specified dataset.
-
-    Args:
-      dataset: The colormap used in the dataset.
-
-    Returns:
-      A numpy array of the dataset colormap.
-
-    Raises:
-      ValueError: If the dataset is not supported.
-    """
-    if dataset == _PASCAL:
-        return create_pascal_label_colormap()
-    elif dataset == _CITYSCAPES:
-        return create_cityscapes_label_colormap()
-    else:
-        raise ValueError('Unsupported dataset.')
-
-
-def label_to_color_image(label, dataset=_PASCAL):
-    """Adds color defined by the dataset colormap to the label.
-
-    Args:
-      label: A 2D array with integer type, storing the segmentation label.
-      dataset: The colormap used in the dataset.
-
-    Returns:
-      result: A 2D array with floating type. The element of the array
-        is the color indexed by the corresponding element in the input label
-        to the PASCAL color map.
-
-    Raises:
-      ValueError: If label is not of rank 2 or its value is larger than color
-        map maximum entry.
-    """
-    if label.ndim != 2:
-        raise ValueError('Expect 2-D input label')
-
-    if np.max(label) >= _DATASET_MAX_ENTRIES[dataset]:
-        raise ValueError('label value too large.')
-
-    colormap = create_label_colormap(dataset)
-    return colormap[label]
-
-
-# Needed to show segmentation colormap labels
-
-
 model_path = './deeplabv3_pascal_trainval_2018_01_04.tar.gz.tar'
 IMAGE_DIR = './test'
+facedetect_path = '/home/duoduo/opencv/data/haarcascades/haarcascade_frontalface_alt.xml'
 
 _FROZEN_GRAPH_NAME = 'frozen_inference_graph'
 
@@ -206,16 +78,6 @@ class DeepLabModel(object):
 with tf.device('/gpu:0'):
     model = DeepLabModel(model_path)
 
-LABEL_NAMES = np.asarray([
-    'background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
-    'bus', 'car', 'cat', 'chair', 'cow', 'diningtable', 'dog',
-    'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa',
-    'train', 'tv'
-])
-
-FULL_LABEL_MAP = np.arange(len(LABEL_NAMES)).reshape(len(LABEL_NAMES), 1)
-FULL_COLOR_MAP = label_to_color_image(FULL_LABEL_MAP)
-
 
 def blur_edge(img, seg_map, dilate_ksize=(5, 5), blur_ksize=(5, 5), sigma=1):
     '''
@@ -235,10 +97,14 @@ def how_to_cut(image, seg_map, orientation, cut_length):
     image1 = image.copy()
     image1[seg_map == 0] = 0
     try:
-        face_locations = face_recognition.face_locations(image1)[0]
+        face_cascade = cv2.CascadeClassifier(facedetect_path)
+
+        face_locations_tmp = face_cascade.detectMultiScale(image1)[0]  # x, y, w. h
+        face_locations = face_locations_tmp[1], face_locations_tmp[0] + face_locations_tmp[2], face_locations_tmp[1] + \
+                         face_locations_tmp[3], face_locations_tmp[0]
         if orientation == 'horizontal':
-            a = face_locations[1]
-            c = image.shape[1] - face_locations[3]
+            a = face_locations[3]  # left
+            c = image1.shape[1] - face_locations[1]
             if c - cut_length > a:
                 return [0, -cut_length]
             elif a - cut_length > c:
@@ -247,43 +113,157 @@ def how_to_cut(image, seg_map, orientation, cut_length):
                 return [int(a / (a + c) * cut_length), -(cut_length - int(a / (a + c) * cut_length))]
         else:
             a = face_locations[0]
-            if a - cut_length > image.shape[0] * 0.2:
+            if a - cut_length > image1.shape[0] * 0.2:
                 return [cut_length, -1]
             else:
                 return [0, -cut_length]
     except:
-        if orientation == 'horizontal':
-            if np.nonzero(seg_map)[1].min() / seg_map.shape[1] < 0.2 and np.nonzero(seg_map)[1].max() / seg_map.shape[
-                1] <= 0.8:
-                return [0, -cut_length]
-            elif np.nonzero(seg_map)[1].min() / seg_map.shape[1] >= 0.2 and np.nonzero(seg_map)[1].max() / \
-                    seg_map.shape[1] > 0.8:
-                return [cut_length, -1]
-            else:
-                return [cut_length // 2, -(cut_length - cut_length // 2)]
-        else:
-            if (np.nonzero(seg_map)[0].min() - cut_length) / seg_map.shape[0] > 0.2:
-                return [cut_length, -1]
-            else:
-                return [0, -cut_length]
+        raise IOError('no face')
+        # if orientation == 'horizontal':
+        #     if np.nonzero(seg_map)[1].min() / seg_map.shape[1] < 0.2 and np.nonzero(seg_map)[1].max() / seg_map.shape[
+        #         1] <= 0.8:
+        #         return [0, -cut_length]
+        #     elif np.nonzero(seg_map)[1].min() / seg_map.shape[1] >= 0.2 and np.nonzero(seg_map)[1].max() / \
+        #             seg_map.shape[1] > 0.8:
+        #         return [cut_length, -1]
+        #     else:
+        #         return [cut_length // 2, -(cut_length - cut_length // 2)]
+        # else:
+        #     if (np.nonzero(seg_map)[0].min() - cut_length) / seg_map.shape[0] > 0.2:
+        #         return [cut_length, -1]
+        #     else:
+        #         return [0, -cut_length]
 
 
-def cut_and_resize(image, seg_map, size):
+def how_to_cut_with_face(image, seg_map, size, face_square=10000, w_mul=1, h_mul=1.5):
+    ratio = size[1] / size[0]
+    image1 = image.copy()
+    image1[seg_map == 0] = 0
+    if not np.sum(seg_map[0, :]):  # 不贴上
+        try:
+            face_cascade = cv2.CascadeClassifier(facedetect_path)
+
+            face_locations_tmp = face_cascade.detectMultiScale(image1)[0]  # x, y, w. h
+            # resize_ratio = np.sqrt(face_square / (face_locations_tmp[2] * face_locations_tmp[3]))
+            # resize = (int(image.shape[1] * resize_ratio), int(image.shape[0] * resize_ratio))
+            face_locations = (face_locations_tmp[1], face_locations_tmp[0] + face_locations_tmp[2], face_locations_tmp[1] + face_locations_tmp[3], face_locations_tmp[0])
+            # image = cv2.resize(image,resize)
+            # seg_map = cv2.resize(seg_map, resize)
+            width = face_locations[1] - face_locations[3]
+            height = face_locations[2] - face_locations[0]
+            bottom_dst = min(int(face_locations[2] + height * h_mul), image.shape[0])
+            left_dst = max(int(face_locations[3] - width * w_mul), 0)
+            right_dst = min(int(face_locations[1] + width * w_mul), image.shape[1])
+            width_dst = right_dst - left_dst
+            height_dst = width_dst * ratio
+            if height_dst > bottom_dst:
+                top_dst = 0
+                height_dst = bottom_dst
+                width_dst = height_dst / ratio
+                left_dst = max(int(face_locations[3] + width / 2 - width_dst / 2), 0)
+                right_dst = min(int(face_locations[3] + width / 2 + width_dst / 2), image.shape[1])
+                width_dst = right_dst - left_dst
+                height_dst = width_dst * ratio
+                top_dst = int(bottom_dst - height_dst)
+            else:
+                top_dst = int(bottom_dst - height_dst)
+            return [top_dst, left_dst, bottom_dst, right_dst]
+        except:
+            # raise IOError('no face')
+            print('no face')
+            if image.shape[0]/image.shape[1] <= size[1]/size[0]:
+                cut_length = image.shape[1] - size[0] * image.shape[0] // size[1]
+                if np.nonzero(seg_map)[1].min() / seg_map.shape[1] < 0.2 and np.nonzero(seg_map)[1].max() / seg_map.shape[
+                    1] <= 0.8:
+                    return [0, 0, image.shape[0], image.shape[1]-cut_length] #[0 , -c]
+                elif np.nonzero(seg_map)[1].min() / seg_map.shape[1] >= 0.2 and np.nonzero(seg_map)[1].max() / \
+                        seg_map.shape[1] > 0.8:
+                    return [0, cut_length, image.shape[0], image.shape[1]]
+                else:
+                    return [0, cut_length // 2, image.shape[0], image.shape[1] - (cut_length - cut_length // 2)]
+            else:
+                cut_length = image.shape[0] - size[1] * image.shape[1] // size[0]
+                if (np.nonzero(seg_map)[0].min() - cut_length) / seg_map.shape[0] > 0.2:
+                    return [cut_length, 0, image.shape[0], image.shape[1]]
+                else:
+                    return [0, 0, image.shape[0]-cut_length, image.shape[1]]
+    else:  # 贴上
+        try:
+            face_cascade = cv2.CascadeClassifier(facedetect_path)
+
+            face_locations_tmp = face_cascade.detectMultiScale(image1)[0]  # x, y, w. h
+            # resize_ratio = np.sqrt(face_square / (face_locations_tmp[2] * face_locations_tmp[3]))
+            # resize = (int(image.shape[1] * resize_ratio), int(image.shape[0] * resize_ratio))
+            face_locations = (face_locations_tmp[1], face_locations_tmp[0] + face_locations_tmp[2], face_locations_tmp[1] + face_locations_tmp[3], face_locations_tmp[0])
+            # image = cv2.resize(image,resize)
+            # seg_map = cv2.resize(seg_map, resize)
+            width = face_locations[1] - face_locations[3]
+            height = face_locations[2] - face_locations[0]
+            top_dst = 0  # might be negative
+            left_dst = max(int(face_locations[3] - width * w_mul), 0)
+            right_dst = min(int(face_locations[1] + width * w_mul), image.shape[1])
+            width_dst = right_dst - left_dst
+            height_dst = width_dst * ratio
+            print('up')
+
+            if height_dst > image.shape[0]:
+                height_dst = image.shape[0]
+                width_dst = height_dst / ratio
+                left_dst = max(int(face_locations[3] + width / 2 - width_dst / 2), 0)
+                right_dst = min(int(face_locations[3] + width / 2 + width_dst / 2), image.shape[1])
+                width_dst = right_dst - left_dst
+                height_dst = width_dst * ratio
+                bottom_dst = int(height_dst)
+            else:
+                bottom_dst = int(height_dst)
+            return [top_dst, left_dst, bottom_dst, right_dst]
+        except:
+            # raise IOError('no face')
+            print('no face')
+            if image.shape[0]/image.shape[1] <= size[1]/size[0]:
+                cut_length = image.shape[1] - size[0] * image.shape[0] // size[1]
+                if np.nonzero(seg_map)[1].min() / seg_map.shape[1] < 0.2 and np.nonzero(seg_map)[1].max() / seg_map.shape[
+                    1] <= 0.8:
+                    return [0, 0, image.shape[0], image.shape[1]-cut_length] #[0 , -c]
+                elif np.nonzero(seg_map)[1].min() / seg_map.shape[1] >= 0.2 and np.nonzero(seg_map)[1].max() / \
+                        seg_map.shape[1] > 0.8:
+                    return [0, cut_length, image.shape[0], image.shape[1]]
+                else:
+                    return [0, cut_length // 2, image.shape[0], image.shape[1] - (cut_length - cut_length // 2)]
+            else:
+                cut_length = image.shape[0] - size[1] * image.shape[1] // size[0]
+                if (np.nonzero(seg_map)[0].min() - cut_length) / seg_map.shape[0] > 0.2:
+                    return [cut_length, 0, image.shape[0], image.shape[1]]
+                else:
+                    return [0, 0, image.shape[0]-cut_length, image.shape[1]]
+
+
+def cut_and_resize(image, seg_map, size, fill, fill_value):
     '''把图片resize到size大小，但是不改变shape，其余地方填空'''
-    if image.shape[1] / image.shape[0] - size[0] / size[1] > 0:  # 横着的图
-        cut_length = image.shape[1] - size[0] * image.shape[0] // size[1]
-        cut = how_to_cut(image, seg_map, 'horizontal', cut_length)
-        seg_map = cv2.resize(seg_map[:, cut[0]:cut[1]], size)
-        image = cv2.resize(image[:, cut[0]:cut[1], :], size)
-
-    elif image.shape[1] / image.shape[0] - size[0] / size[1] < 0:  # 竖着的图
-        cut_length = image.shape[0] - size[1] * image.shape[1] // size[0]
-        cut = how_to_cut(image, seg_map, 'vertical', cut_length)
-        seg_map = cv2.resize(seg_map[cut[0]:cut[1], :], size)
-        image = cv2.resize(image[cut[0]:cut[1], :, :], size)
-    else:
-        seg_map = cv2.resize(seg_map, size)
-        image = cv2.resize(image, size)
+    # if image.shape[1] / image.shape[0] - size[0] / size[1] > 0:  # 横着的图
+    #     cut_length = image.shape[1] - size[0] * image.shape[0] // size[1]
+    #     cut = how_to_cut(image, seg_map, 'horizontal', cut_length)
+    #     seg_map = cv2.resize(seg_map[:, cut[0]:cut[1]], size)
+    #     image = cv2.resize(image[:, cut[0]:cut[1], :], size)
+    #
+    # elif image.shape[1] / image.shape[0] - size[0] / size[1] < 0:  # 竖着的图
+    #     cut_length = image.shape[0] - size[1] * image.shape[1] // size[0]
+    #     cut = how_to_cut(image, seg_map, 'vertical', cut_length)
+    #     seg_map = cv2.resize(seg_map[cut[0]:cut[1], :], size)
+    #     image = cv2.resize(image[cut[0]:cut[1], :, :], size)
+    # else:
+    #     seg_map = cv2.resize(seg_map, size)
+    #     image = cv2.resize(image, size)
+    # return image, seg_map
+    cut = how_to_cut_with_face(image, seg_map, size)
+    if cut[0] < 0:
+        image = np.pad(image, [[abs(cut[0]), 0], [0, 0], [0, 0]], 'constant')
+        seg_map = np.pad(seg_map, [[abs(cut[0]), 0], [0, 0]], 'constant')
+        if fill:
+            image[np.where(seg_map == 0)] = fill_value
+        cut[0] = 0
+    seg_map = cv2.resize(seg_map[cut[0]:cut[2], cut[1]:cut[3]], size)
+    image = cv2.resize(image[cut[0]:cut[2], cut[1]:cut[3], :], size)
     return image, seg_map
 
 
@@ -346,7 +326,8 @@ def resize_and_pad(image, size, pad_value=0, height_how='both'):
             size_real = (int(image.shape[1] / image.shape[0] * size[1]), size[1])
             image = np.pad(cv2.resize(image, size_real), [[0, 0],
                                                           [int((size[0] - size_real[0]) // 2),
-                                                           size[0] - size_real[0] - int((size[0] - size_real[0]) // 2)]],
+                                                           size[0] - size_real[0] - int(
+                                                               (size[0] - size_real[0]) // 2)]],
                            'constant', constant_values=pad_value)
         elif height_how == 'left':
             size_real = (int(image.shape[1] / image.shape[0] * size[1]), size[1])
@@ -361,49 +342,7 @@ def resize_and_pad(image, size, pad_value=0, height_how='both'):
     return image
 
 
-# def how_to_cut_and_pad(image, seg_map, size):
-#     # 填上不填下，左右看哪边贴边更严重
-#     left_edge = np.nonzero(seg_map[:, 0])[0]
-#     right_edge = np.nonzero(seg_map[:, -1])[0]
-#     if left_edge.shape[0] == 0:
-#         left_length = 0
-#     else:
-#         left_length = left_edge.max() - left_edge.min()
-#     if right_edge.shape[0] == 0:
-#         right_length = 0
-#     else:
-#         right_length = right_edge.max() - right_edge.min()
-#
-#     tmp_shape = image.shape
-#     # cut
-#     if tmp_shape[1] >= size[0]:
-#         # 如果image比background更宽，cut不严重的贴边
-#         if left_length >= right_length:
-#             image = image[:, :size[0], :]
-#             seg_map = seg_map[:, :size[0]]
-#         if left_length < right_length:
-#             image = image[:, tmp_shape[1]-size[0]:, :]
-#             seg_map = seg_map[:, tmp_shape[1]-size[0]:]
-#     if tmp_shape[0] >= size[1]:
-#         # 如果image比background更长，cut下沿
-#         image = image[:size[0], :, :]
-#         seg_map = seg_map[:size[0], :]
-#
-#     # pad
-#     tmp_shape = image.shape
-#     if left_length >= right_length:
-#         print(1)
-#         image = np.pad(image, [[size[1] - tmp_shape[0], 0], [0, size[0] - tmp_shape[1]], [0, 0]], 'constant')
-#         seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0], [0, size[0] - tmp_shape[1]]], 'constant')
-#     else:
-#         print(2)
-#         image = np.pad(image, [[size[1] - tmp_shape[0], 0], [size[0] - tmp_shape[1], 0], [0, 0]], 'constant')
-#         seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0], [size[0] - tmp_shape[1], 0]], 'constant')
-#     return image, seg_map
-
-
 def how_to_cut_and_pad(image, seg_map, size):
-
     left_edge = np.nonzero(seg_map[:, 0])[0]
     right_edge = np.nonzero(seg_map[:, -1])[0]
     if left_edge.shape[0] == 0:
@@ -422,17 +361,16 @@ def how_to_cut_and_pad(image, seg_map, size):
     image = image[height_min:height_max, width_min:width_max, :]
     seg_map = seg_map[height_min:height_max, width_min:width_max]
 
-
     tmp_shape = image.shape
     if tmp_shape[0] <= size[1] and tmp_shape[1] <= size[0] and left_length <= right_length:
         if left_length == 0 and right_length == 0:
             image = np.pad(image, [[size[1] - tmp_shape[0], 0],
-                                   [(size[0] - tmp_shape[1])//2,
-                                    size[0] - tmp_shape[1] - (size[0] - tmp_shape[1])//2],
+                                   [(size[0] - tmp_shape[1]) // 2,
+                                    size[0] - tmp_shape[1] - (size[0] - tmp_shape[1]) // 2],
                                    [0, 0]], 'constant')
             seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0],
-                                       [(size[0] - tmp_shape[1])//2,
-                                    size[0] - tmp_shape[1] - (size[0] - tmp_shape[1])//2]], 'constant')
+                                       [(size[0] - tmp_shape[1]) // 2,
+                                        size[0] - tmp_shape[1] - (size[0] - tmp_shape[1]) // 2]], 'constant')
         else:
             image = np.pad(image, [[size[1] - tmp_shape[0], 0], [size[0] - tmp_shape[1], 0], [0, 0]], 'constant')
             seg_map = np.pad(seg_map, [[size[1] - tmp_shape[0], 0], [size[0] - tmp_shape[1], 0]], 'constant')
@@ -490,7 +428,7 @@ def image_to_background(image, seg_map, background, positions, fill, default_pos
             image = blur_edge(image, seg_map)
         background = cv2.imread(background)
         size = (positions[2] - positions[0], positions[3] - positions[1])
-        image, seg_map = cut_and_resize(image, seg_map, size)
+        image, seg_map = cut_and_resize(image, seg_map, size, fill, fill_value)
         # image = resize_and_pad(image, size, pad_value=fill_value)
         # seg_map = resize_and_pad(seg_map, size)
         if not fill:
@@ -512,7 +450,7 @@ def image_to_background(image, seg_map, background, positions, fill, default_pos
             image[np.where(seg_map == 0)] = fill_value
             image = blur_edge(image, seg_map)
         default_size = (default_positions[2] - default_positions[0], default_positions[3] - default_positions[1])
-        image, seg_map = cut_and_resize(image, seg_map, default_size)
+        image, seg_map = cut_and_resize(image, seg_map, default_size, fill, fill_value)
         background = cv2.imread(background)
         height, width = image.shape[:2]
         positions_src = np.array([[0, 0], [0, height - 1], [width - 1, height - 1], [width - 1, 0]])
@@ -606,7 +544,7 @@ def run_demo_image(image_name):
     # seg_map_out[np.where(seg_map_out!=15)] = 0
     # seg_map_out[np.where(seg_map_out==15)] = 255
     # cv2.imwrite(IMAGE_DIR + '/' + image_name.split('.')[0] + '.png', seg_map_out)
-    vis_segmentation(np.array(resized_im), seg_map, image_name, width, height, 'ground2')
+    vis_segmentation(np.array(resized_im), seg_map, image_name, width, height, 'id_card1')
 
 
 def capture_positions(image_path):
@@ -636,11 +574,9 @@ def capture_positions(image_path):
 
 
 images = os.listdir(IMAGE_DIR)
-images = list(filter(lambda x :'png' not in x, images))
+images = list(filter(lambda x: 'png' not in x, images))
 
 for k, image_name in enumerate(images):  # [:5]:
     run_demo_image(image_name)
-
-
 
 # cv2.imshow('seg_map',seg_map);cv2.waitKey(0)
