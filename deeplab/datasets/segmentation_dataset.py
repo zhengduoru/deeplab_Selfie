@@ -80,8 +80,8 @@ _PASCAL_VOC_SEG_INFORMATION = DatasetDescriptor(
         'trainval': 2913,
         'val': 1449,
     },
-    num_classes=21,
-    ignore_label=[255, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20],
+    num_classes=2,
+    ignore_label=255,
 )
 
 _SELFIE = DatasetDescriptor(

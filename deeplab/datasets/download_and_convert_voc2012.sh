@@ -57,7 +57,7 @@ download_and_uncompress() {
 BASE_URL="http://host.robots.ox.ac.uk/pascal/VOC/voc2012/"
 FILENAME="VOCtrainval_11-May-2012.tar"
 
-download_and_uncompress "${BASE_URL}" "${FILENAME}"
+# download_and_uncompress "${BASE_URL}" "${FILENAME}"
 
 cd "${CURRENT_DIR}"
 

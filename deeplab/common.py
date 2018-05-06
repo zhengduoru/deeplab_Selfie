@@ -42,7 +42,7 @@ flags.DEFINE_integer('logits_kernel_size', 1,
 # When using 'mobilent_v2', we set atrous_rates = decoder_output_stride = None.
 # When using 'xception_65', we set atrous_rates = [6, 12, 18] (output stride 16)
 # and decoder_output_stride = 4.
-flags.DEFINE_enum('model_variant', 'mobilenet_v2',
+flags.DEFINE_enum('model_variant', 'xception_65',
                   ['xception_65', 'mobilenet_v2'], 'DeepLab model variant.')
 
 flags.DEFINE_multi_float('image_pyramid', None,

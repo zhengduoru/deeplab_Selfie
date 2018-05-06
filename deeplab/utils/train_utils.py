@@ -102,7 +102,7 @@ def get_model_init_fn(train_logdir,
 
   # Variables that will not be restored.
   exclude_list = ['global_step', 'logits/semantic/Conv2D', 'logits/semantic/BiasAdd', 'ResizeBilinear_2',
-                  'Strided_slice_7', 'ResizeBilinear_3']
+                  'Strided_slice_7', 'ResizeBilinear_3', 'logits/semantic/biases', 'logits/semantic/weights']
   if not initialize_last_layer:
     exclude_list.extend(last_layers)
 
