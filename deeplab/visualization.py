@@ -4,7 +4,6 @@ Created on Tue Apr  3 08:56:25 2018
 
 @author: zdr2535
 """
-# 讲Notebook脚本改为.py文件，并且能够批量预测。
 import os
 import tarfile
 import cv2
@@ -16,7 +15,7 @@ import tensorflow as tf
 if tf.__version__ < '1.5.0':
     raise ImportError('Please upgrade your tensorflow installation to v1.5.0 or newer!')
 
-model_path = './deeplabv3_pascal_trainval_2018_01_04.tar.gz.tar'
+model_path = '/home/duoduo/github/deeplab_selfie/deeplab/datasets/pascal_voc_seg/init_models/deeplabv3_pascal_trainval/frozen_inference_graph3.pb'
 IMAGE_DIR = './test'
 facedetect_path = '/home/duoduo/opencv/data/haarcascades/haarcascade_frontalface_alt.xml'
 
@@ -30,20 +29,21 @@ class DeepLabModel(object):
     OUTPUT_TENSOR_NAME = 'SemanticPredictions:0'
     INPUT_SIZE = 513
 
-    def __init__(self, tarball_path):
+    def __init__(self, model_path):
         """Creates and loads pretrained deeplab model."""
         self.graph = tf.Graph()
 
-        graph_def = None
+        # graph_def = None
         # Extract frozen graph from tar archive.
-        tar_file = tarfile.open(tarball_path)
-        for tar_info in tar_file.getmembers():
-            if _FROZEN_GRAPH_NAME in os.path.basename(tar_info.name):
-                file_handle = tar_file.extractfile(tar_info)
-                graph_def = tf.GraphDef.FromString(file_handle.read())
-                break
-
-        tar_file.close()
+        # tar_file = tarfile.open(tarball_path)
+        # for tar_info in tar_file.getmembers():
+        #     if _FROZEN_GRAPH_NAME in os.path.basename(tar_info.name):
+        #         file_handle = tar_file.extractfile(tar_info)
+        #         graph_def = tf.GraphDef.FromString(file_handle.read())
+        #         break
+        with open(model_path, 'rb') as f:
+            graph_def = tf.GraphDef.FromString(f.read())
+        # tar_file.close()
 
         if graph_def is None:
             raise RuntimeError('Cannot find inference graph in tar archive.')
@@ -472,8 +472,8 @@ def image_to_background(image, seg_map, background, positions, fill, default_pos
 def vis_segmentation(image, seg_map, image_name, width, height, background_image):
     image = cv2.resize(image, (width, height))
     seg_map = cv2.resize(seg_map.astype('uint8'), (width, height))
-    seg_map[np.where(seg_map != 15)] = 0
-    seg_map[np.where(seg_map == 15)] = 255
+    seg_map[np.where(seg_map != 1)] = 0
+    seg_map[np.where(seg_map == 1)] = 255
     # GaussianBlur seg_map
     seg_map = cv2.GaussianBlur(seg_map, (5, 5), 1)
     # 最大连通域
@@ -485,14 +485,14 @@ def vis_segmentation(image, seg_map, image_name, width, height, background_image
     seg_map = cv2.morphologyEx(seg_map, cv2.MORPH_OPEN, kernel=np.ones((5, 5), np.uint8))
     # face_detect
     # face_positions = face_recognition.face_locations(image)
-
+    tail = '_model3.jpg'
     if background_image == 'worldcup':
         # image_to_background
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/worldcup.png',
                                                   positions=None, fill=False, body_square=100000)
         # blur_edge
         background = blur_edge(background, seg_map)
-        cv2.imwrite('./worldcup/merge/worldcup/' + image_name.split('.')[0] + '.jpg', background)
+        cv2.imwrite('./worldcup/merge/worldcup/' + image_name.split('.')[0] + tail, background)
     if background_image == 'ground1':
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/ground1.jpeg',
                                                   positions=None, fill=False, body_square=50000)
@@ -500,7 +500,7 @@ def vis_segmentation(image, seg_map, image_name, width, height, background_image
         # blur_edge
         background = blur_edge(background, seg_map)
         print(background.shape)
-        cv2.imwrite('./worldcup/merge/ground_first/' + image_name.split('.')[0] + '.jpg', background)
+        cv2.imwrite('./worldcup/merge/ground_first/' + image_name.split('.')[0] + tail, background)
     if background_image == 'ground2':
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/ground2.jpg',
                                                   positions=None, fill=False, body_square=200000)
@@ -508,30 +508,51 @@ def vis_segmentation(image, seg_map, image_name, width, height, background_image
         # blur_edge
         background = blur_edge(background, seg_map)
         print(background.shape)
-        cv2.imwrite('./worldcup/merge/ground_second/' + image_name.split('.')[0] + '.jpg', background)
+        cv2.imwrite('./worldcup/merge/ground_second/' + image_name.split('.')[0] + tail, background)
 
     if background_image == 'id_card1':
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/id_card1.png',
                                                   [181, 222, 345, 446], fill=True, fill_value=255)
-        cv2.imwrite('./worldcup/merge/id_card1/' + image_name.split('.')[0] + '.jpg', background)
+        cv2.imwrite('./worldcup/merge/id_card1/' + image_name.split('.')[0] + tail, background)
     if background_image == 'id_card2':
         default_positions = [181, 222, 345, 446]
         positions = np.array([[441, 216], [395, 378], [502, 414], [550, 228]])
         fill_value = [135 + np.random.randint(10), 125 + np.random.randint(10), 115 + np.random.randint(10)]
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/id_card2.jpg',
-                                                  positions, default_positions, fill=True, fill_value=fill_value)
-        cv2.imwrite('./worldcup/merge/id_card2/' + image_name.split('.')[0] + '.jpg', background)
+                                                  positions, fill=True, default_positions=default_positions,
+                                                  fill_value=fill_value)
+        cv2.imwrite('./worldcup/merge/id_card2/' + image_name.split('.')[0] + tail, background)
     if background_image == 'final1':
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/final1.jpg',
                                                   [252, 404, 316, 483], fill=True, fill_value=130)
-        cv2.imwrite('./worldcup/merge/final1/' + image_name.split('.')[0] + '.jpg', background)
+        cv2.imwrite('./worldcup/merge/final1/' + image_name.split('.')[0] + tail, background)
     if background_image == 'final2':
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/final2.jpg',
                                                   [382, 407, 461, 500], fill=True, fill_value=130)
-        cv2.imwrite('./worldcup/merge/final2/' + image_name.split('.')[0] + '.jpg', background)
+        cv2.imwrite('./worldcup/merge/final2/' + image_name.split('.')[0] + tail, background)
+    if background_image == 'deqing1':
+        background, seg_map = image_to_background(image, seg_map, './worldcup/background/deqing1.jpg',
+                                                  None, fill=False, body_square=50000)
+        background = blur_edge(background, seg_map)
+        cv2.imwrite('./worldcup/merge/deqing1/' + image_name.split('.')[0] + tail, background)
+    if background_image == 'deqing2':
+        background, seg_map = image_to_background(image, seg_map, './worldcup/background/deqing2.jpg',
+                                                  None, fill=False, body_square=50000)
+        background = blur_edge(background, seg_map)
+        cv2.imwrite('./worldcup/merge/deqing2/' + image_name.split('.')[0] + tail, background)
+    if background_image == 'deqing3':
+        background, seg_map = image_to_background(image, seg_map, './worldcup/background/deqing3.jpg',
+                                                  None, fill=False, body_square=300000)
+        background = blur_edge(background, seg_map)
+        cv2.imwrite('./worldcup/merge/deqing3/' + image_name.split('.')[0] + tail, background)
+    if background_image == 'deqing4':
+        background, seg_map = image_to_background(image, seg_map, './worldcup/background/deqing4.jpg',
+                                                  None, fill=False, body_square=100000)
+        background = blur_edge(background, seg_map)
+        cv2.imwrite('./worldcup/merge/deqing4/' + image_name.split('.')[0] + tail, background)
 
 
-def run_demo_image(image_name):
+def run_demo_image(image_name, target_back):
     try:
         image_path = os.path.join(IMAGE_DIR, image_name)
         orignal_im = Image.open(image_path)
@@ -540,11 +561,12 @@ def run_demo_image(image_name):
         return
     print('running deeplab on image %s...' % image_name)
     resized_im, seg_map, width, height = model.run(orignal_im)
+    print()
     # seg_map_out = seg_map.copy()
     # seg_map_out[np.where(seg_map_out!=15)] = 0
     # seg_map_out[np.where(seg_map_out==15)] = 255
     # cv2.imwrite(IMAGE_DIR + '/' + image_name.split('.')[0] + '.png', seg_map_out)
-    vis_segmentation(np.array(resized_im), seg_map, image_name, width, height, 'id_card1')
+    vis_segmentation(np.array(resized_im), seg_map, image_name, width, height, target_back)
 
 
 def capture_positions(image_path):
@@ -576,7 +598,8 @@ def capture_positions(image_path):
 images = os.listdir(IMAGE_DIR)
 images = list(filter(lambda x: 'png' not in x, images))
 
-for k, image_name in enumerate(images):  # [:5]:
-    run_demo_image(image_name)
+for target_back in ['worldcup']:
+    for k, image_name in enumerate(images):  # [:5]:
+        run_demo_image(image_name, target_back)
 
 # cv2.imshow('seg_map',seg_map);cv2.waitKey(0)
