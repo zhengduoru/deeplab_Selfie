@@ -316,8 +316,10 @@ def main(unused_argv):
       summaries.add(tf.summary.histogram(variable.op.name, variable))
 
     with tf.device(config.variables_device()):
+      trainable_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='decoder') + \
+                      tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='logits')
       total_loss, grads_and_vars = model_deploy.optimize_clones(
-          clones, optimizer)
+          clones, optimizer, var_list=trainable_variables)
       total_loss = tf.check_numerics(total_loss, 'Loss is inf or nan.')
       summaries.add(tf.summary.scalar('total_loss', total_loss))
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # use this script in ./models/research/deeplab
 # Exit immediately if a command exits with a non-zero status.
 set -e

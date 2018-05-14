@@ -15,7 +15,7 @@ import tensorflow as tf
 if tf.__version__ < '1.5.0':
     raise ImportError('Please upgrade your tensorflow installation to v1.5.0 or newer!')
 
-model_path = '/home/duoduo/github/deeplab_selfie/deeplab/datasets/pascal_voc_seg/init_models/deeplabv3_pascal_trainval/frozen_inference_graph3.pb'
+model_path = '/home/duoduo/github/deeplab_selfie/deeplab/datasets/pascal_voc_seg/init_models/deeplabv3_pascal_trainval/frozen_inference_graph5.pb'
 IMAGE_DIR = './test'
 facedetect_path = '/home/duoduo/opencv/data/haarcascades/haarcascade_frontalface_alt.xml'
 
@@ -485,7 +485,7 @@ def vis_segmentation(image, seg_map, image_name, width, height, background_image
     seg_map = cv2.morphologyEx(seg_map, cv2.MORPH_OPEN, kernel=np.ones((5, 5), np.uint8))
     # face_detect
     # face_positions = face_recognition.face_locations(image)
-    tail = '_model3.jpg'
+    tail = '_model5.jpg'
     if background_image == 'worldcup':
         # image_to_background
         background, seg_map = image_to_background(image, seg_map, './worldcup/background/worldcup.png',
